@@ -1,1 +1,3 @@
-add_library(LLVMAtomicCount MODULE AtomicCount.cpp)
+add_llvm_loadable_module(LLVMAtomicCount
+  AtomicCount.cpp
+  )
