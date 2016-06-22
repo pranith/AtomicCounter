@@ -38,7 +38,7 @@ bool AtomicCount::runOnModule(Module &M)
     modified |= runOnFunction(*it, M);
   }
 
-  M.dump();
+  //M.dump();
 
   return modified;
 }
