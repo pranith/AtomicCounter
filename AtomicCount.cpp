@@ -38,6 +38,8 @@ bool AtomicCount::runOnModule(Module &M)
     modified |= runOnFunction(*it, M);
   }
 
+  M.dump();
+
   return modified;
 }
 
@@ -60,6 +62,15 @@ bool AtomicCount::runOnBasicBlock(BasicBlock &bb, Module &M)
 
   int num_atomic_inst = 0;
   for (auto it = bb.begin(); it != bb.end(); it++) {
+    if ((std::string)it->getOpcodeName() == "ret") {
+      if (num_atomic_inst) {
+	new AtomicRMWInst(AtomicRMWInst::Add,
+			  atomicCounter,
+			  ConstantInt::get(Type::getInt64Ty(bb.getContext()), num_atomic_inst),
+			  AtomicOrdering::SequentiallyConsistent,
+			  CrossThread, &*it);
+      }
+    }
     switch (it->getOpcode()) {
     case Instruction::AtomicCmpXchg:
     case Instruction::AtomicRMW:
@@ -69,17 +80,7 @@ bool AtomicCount::runOnBasicBlock(BasicBlock &bb, Module &M)
     }
   }
 
-  if (num_atomic_inst) {
-    new AtomicRMWInst(AtomicRMWInst::Add,
-		      atomicCounter,
-		      ConstantInt::get(Type::getInt64Ty(bb.getContext()), num_atomic_inst),
-		      AtomicOrdering::SequentiallyConsistent,
-		      CrossThread, &bb);
-
-    return true;
-  }
-
-  return false;
+  return true;
 }
 
 bool AtomicCount::initialize(Module &M)
@@ -88,19 +89,30 @@ bool AtomicCount::initialize(Module &M)
   Function *mainFunc = M.getFunction("main");
   assert(mainFunc && "Error: atomic counter requires a main function");
 
+  Type *I64Ty = Type::getInt64Ty(M.getContext());
+  // Create atomic counter global variable
+  new GlobalVariable(M, I64Ty, false, GlobalValue::CommonLinkage, ConstantInt::get(I64Ty, 0), "atomicCounter");
+
+  // Build printf function handle
   std::vector<Type *> FTyArgs;
   FTyArgs.push_back(Type::getInt8PtrTy(M.getContext()));
-  Value *format_long = Builder.CreateGlobalStringPtr("%ld", "formatLong");
-  std::vector<Value *> argVec;
-  argVec.push_back(format_long);
   FunctionType *FTy = FunctionType::get(Type::getInt32Ty(M.getContext()), FTyArgs, true);
   Function *printF = (Function *)M.getOrInsertFunction("printf", FTy);
   assert(printF != NULL);
 
   for (auto bb = mainFunc->begin(); bb != mainFunc->end(); bb++) {
     for(auto it = bb->begin(); it != bb->end(); it++) {
+      // insert at the end of main function
       if ((std::string)it->getOpcodeName() == "ret") {
 	Builder.SetInsertPoint(&*bb, it);
+	// Build Arguments
+	Value *format_long = Builder.CreateGlobalStringPtr("Atomic Counter: %ld\n", "formatLong");
+	std::vector<Value *> argVec;
+	argVec.push_back(format_long);
+
+	Value *atomicCounter = M.getGlobalVariable("atomicCounter");
+	Value* finalVal = new LoadInst(atomicCounter, atomicCounter->getName()+".val", &*it);
+	argVec.push_back(finalVal);
 	CallInst::Create(printF, argVec, "printf", &*it);
       }
     }
