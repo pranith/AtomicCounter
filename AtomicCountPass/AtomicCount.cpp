@@ -66,15 +66,6 @@ bool AtomicCount::runOnBasicBlock(BasicBlock &bb, Module &M)
 
   int num_atomic_inst = 0;
   for (auto it = bb.begin(); it != bb.end(); it++) {
-    if ((std::string)it->getOpcodeName() == "ret") {
-      if (num_atomic_inst) {
-	new AtomicRMWInst(AtomicRMWInst::Add,
-			  atomicCounter,
-			  ConstantInt::get(Type::getInt64Ty(bb.getContext()), num_atomic_inst),
-			  AtomicOrdering::SequentiallyConsistent,
-			  CrossThread, &*it);
-      }
-    }
     switch (it->getOpcode()) {
     case Instruction::AtomicCmpXchg:
     case Instruction::AtomicRMW:
@@ -82,6 +73,13 @@ bool AtomicCount::runOnBasicBlock(BasicBlock &bb, Module &M)
     default:
       break;
     }
+  }
+  if (num_atomic_inst) {
+    new AtomicRMWInst(AtomicRMWInst::Add,
+        atomicCounter,
+        ConstantInt::get(Type::getInt64Ty(bb.getContext()), num_atomic_inst),
+        AtomicOrdering::SequentiallyConsistent,
+        CrossThread, bb.getTerminator());
   }
 
   return true;
