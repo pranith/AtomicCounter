@@ -34,7 +34,7 @@ int main()
     test3();
     v += 3;
   }
-  test23();
+  //test23();
 
   printf("%d\n", v);
 
