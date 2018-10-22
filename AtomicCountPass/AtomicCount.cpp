@@ -79,7 +79,7 @@ bool AtomicCount::runOnBasicBlock(BasicBlock &bb, Module &M)
         atomicCounter,
         ConstantInt::get(Type::getInt64Ty(bb.getContext()), num_atomic_inst),
         AtomicOrdering::SequentiallyConsistent,
-        CrossThread, bb.getTerminator());
+	SyncScope::System, bb.getTerminator());
   }
 
   return true;
